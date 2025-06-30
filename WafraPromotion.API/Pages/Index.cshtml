@@ -1,0 +1,19 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome</h1>
+    <p>Wafra Promotion Platform.</p>
+    <p><a asp-page="/Admin/Index">Go to Admin Area</a> (Requires Login)</p>
+</div>
+@{
+}
+public class IndexModel : PageModel
+{
+    public void OnGet()
+    {
+    }
+}

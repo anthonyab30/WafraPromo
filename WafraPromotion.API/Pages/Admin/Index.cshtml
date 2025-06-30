@@ -1,0 +1,51 @@
+@page
+@model WafraPromotion.API.Pages.Admin.IndexModel
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "Admin")]
+
+@{
+    ViewData["Title"] = "Admin Dashboard";
+}
+
+<h1>Admin Dashboard</h1>
+<hr />
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">View Entries</h5>
+                <p class="card-text">View and filter submitted entries.</p>
+                <a asp-page="./Entries" class="btn btn-primary">Go to Entries</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Draw Winner</h5>
+                <p class="card-text">Perform a random draw to select a winner.</p>
+                <a asp-page="./DrawWinner" class="btn btn-success">Go to Draw</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">System Logs</h5>
+                <p class="card-text">View application logs and history (Placeholder).</p>
+                <a href="#" class="btn btn-info disabled">View Logs (TBD)</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@{
+}
+public class IndexModel : PageModel
+{
+    public void OnGet()
+    {
+    }
+}

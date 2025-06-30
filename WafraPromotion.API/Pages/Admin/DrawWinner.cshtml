@@ -1,0 +1,115 @@
+@page
+@model WafraPromotion.API.Pages.Admin.DrawWinnerModel
+@using Microsoft.AspNetCore.Authorization
+@using System.Security.Cryptography // For RandomNumberGenerator
+
+@attribute [Authorize(Roles = "Admin")]
+
+@{
+    ViewData["Title"] = "Draw Winner";
+}
+
+<h1>Draw Winner</h1>
+<hr />
+
+<form method="post">
+    <button type="submit" class="btn btn-success btn-lg">Perform Random Draw</button>
+</form>
+
+@if (!string.IsNullOrEmpty(Model.StatusMessage))
+{
+    var statusMessageClass = Model.StatusMessage.ToLower().Contains("error") || Model.StatusMessage.ToLower().Contains("no entries") ? "alert-danger" : "alert-info";
+    if (Model.Winner != null) { statusMessageClass = "alert-success"; }
+    <div class="mt-4 alert @statusMessageClass">
+        @Model.StatusMessage
+    </div>
+}
+
+@if (Model.Winner != null)
+{
+    <div class="mt-4 alert alert-success">
+        <h4>🎉 Winner Selected! 🎉</h4>
+        <p><strong>Entry ID:</strong> @Model.Winner.Id</p>
+        <p><strong>Phone Number:</strong> @Model.Winner.PhoneNumber</p>
+        <p><strong>Submitted Code:</strong> @Model.Winner.Code</p>
+        <p><strong>Timestamp:</strong> @Model.Winner.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</p>
+        @if (!string.IsNullOrEmpty(Model.Winner.ImagePath))
+        {
+            <p><a href="~/@Model.Winner.ImagePath?.Replace("\\", "/")" target="_blank">View Winner's Image</a></p>
+        }
+    </div>
+}
+else if (Model.DrawAttempted && Model.Winner == null)
+{
+    <div class="mt-4 alert alert-warning">
+        <p>No entries available to draw from, or an error occurred.</p>
+    </div>
+}
+
+
+@{
+}
+public class DrawWinnerModel : PageModel
+{
+    private readonly WafraPromotion.API.Data.ApplicationDbContext _context;
+    private readonly ILogger<DrawWinnerModel> _logger;
+
+
+    public DrawWinnerModel(WafraPromotion.API.Data.ApplicationDbContext context, ILogger<DrawWinnerModel> logger)
+    {
+        _context = context;
+        _logger = logger;
+    }
+
+    [BindProperty]
+    public Entry? Winner { get; set; }
+
+    // public bool DrawAttempted { get; set; } = false; // Replaced by StatusMessage
+    public string? StatusMessage { get; set; }
+
+
+    public void OnGet()
+    {
+        // Can load initial state if needed
+    }
+
+    public async Task<IActionResult> OnPostAsync()
+    {
+        // DrawAttempted = true; // No longer needed
+        try
+        {
+            var allEntries = await _context.Entries!
+                                    .Where(e => !string.IsNullOrEmpty(e.ImagePath) && !string.IsNullOrEmpty(e.Code)) // Consider only complete entries
+                                    // Optional: Add criteria like "IsWinner == false" if you mark winners
+                                    .ToListAsync();
+
+            if (!allEntries.Any())
+            {
+                _logger.LogWarning("Draw attempted but no eligible entries found.");
+                Winner = null;
+                StatusMessage = "No eligible entries available to draw from.";
+                return Page();
+            }
+
+            // Use cryptographically secure random number generator
+            int randomIndex = RandomNumberGenerator.GetInt32(0, allEntries.Count);
+            Winner = allEntries[randomIndex];
+
+            _logger.LogInformation($"Draw performed. Winner Entry ID: {Winner.Id}, Phone: {Winner.PhoneNumber}");
+            StatusMessage = $"Successfully drew winner: Entry ID {Winner.Id} (Phone: {Winner.PhoneNumber})";
+
+            // Optional: Mark the winner in the database to prevent re-drawing or for audit
+            // Winner.IsWinner = true; // Assuming an IsWinner property exists on Entry model
+            // _context.Update(Winner);
+            // await _context.SaveChangesAsync();
+            // _logger.LogInformation($"Winner Entry ID {Winner.Id} marked as winner in the database.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred during the draw process.");
+            Winner = null;
+            StatusMessage = "An unexpected error occurred during the draw. Please check logs.";
+        }
+        return Page();
+    }
+}
