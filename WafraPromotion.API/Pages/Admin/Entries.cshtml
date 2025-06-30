@@ -1,0 +1,176 @@
+@page
+@model WafraPromotion.API.Pages.Admin.EntriesModel
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "Admin")]
+
+@{
+    ViewData["Title"] = "Promotion Entries";
+}
+
+<h1>Promotion Entries</h1>
+<hr />
+
+<form method="get" class="mb-4">
+    <div class="form-row">
+        <div class="form-group col-md-3">
+            <label asp-for="SearchPhone">Phone Number</label>
+            <input asp-for="SearchPhone" class="form-control" />
+        </div>
+        <div class="form-group col-md-3">
+            <label asp-for="SearchCode">Code</label>
+            <input asp-for="SearchCode" class="form-control" />
+        </div>
+        <div class="form-group col-md-3">
+            <label asp-for="SearchDateFrom">Date From</label>
+            <input asp-for="SearchDateFrom" type="date" class="form-control" />
+        </div>
+        <div class="form-group col-md-3">
+            <label asp-for="SearchDateTo">Date To</label>
+            <input asp-for="SearchDateTo" type="date" class="form-control" />
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Filter</button>
+    <a asp-page="./Entries" class="btn btn-secondary">Clear Filters</a>
+    <a asp-page-handler="Export"
+       asp-route-searchPhone="@Model.SearchPhone"
+       asp-route-searchCode="@Model.SearchCode"
+       asp-route-searchDateFrom="@Model.SearchDateFrom?.ToString("yyyy-MM-dd")"
+       asp-route-searchDateTo="@Model.SearchDateTo?.ToString("yyyy-MM-dd")"
+       class="btn btn-success float-right">Export to CSV</a>
+</form>
+
+@if (!Model.Entries.Any())
+{
+    <p>No entries found matching your criteria.</p>
+}
+else
+{
+    <table class="table table-striped table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Phone Number</th>
+                <th>Submitted Code</th>
+                <th>OCR Code</th>
+                <th>Image Hash</th>
+                <th>Timestamp (UTC)</th>
+                <th>Image</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entry in Model.Entries)
+            {
+                <tr>
+                    <td>@entry.Id</td>
+                    <td>@entry.PhoneNumber</td>
+                    <td>@entry.Code</td>
+                    <td>@entry.OcrCode</td>
+                    <td>@entry.ImageHash</td>
+                    <td>@entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(entry.ImagePath))
+                        {
+                            // ImagePath is like "UploadedImages/image.jpg"
+                            // Static files are configured for the UploadedImages folder.
+                            <a href="~/@entry.ImagePath?.Replace("\\", "/")" target="_blank">View Image</a>
+                        }
+                        else
+                        {
+                            <span>No Image</span>
+                        }
+                    </td>
+                    <td>
+                        @* <a asp-page="./ViewEntry" asp-route-id="@entry.Id" class="btn btn-sm btn-info">Details</a> *@
+                        @* Add other actions like delete or flag later *@
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@{
+}
+public class EntriesModel : PageModel
+{
+    private readonly WafraPromotion.API.Data.ApplicationDbContext _context;
+
+    public EntriesModel(WafraPromotion.API.Data.ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public IList<Entry> Entries { get; set; } = new List<Entry>();
+
+    [BindProperty(SupportsGet = true)]
+    public string? SearchPhone { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? SearchCode { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public DateTime? SearchDateFrom { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public DateTime? SearchDateTo { get; set; }
+
+    public async Task OnGetAsync()
+    {
+        var query = _context.Entries!.AsQueryable();
+
+        if (!string.IsNullOrEmpty(SearchPhone))
+        {
+            query = query.Where(e => e.PhoneNumber != null && e.PhoneNumber.Contains(SearchPhone));
+        }
+        if (!string.IsNullOrEmpty(SearchCode))
+        {
+            query = query.Where(e => e.Code != null && e.Code.Contains(SearchCode));
+        }
+        if (SearchDateFrom.HasValue)
+        {
+            query = query.Where(e => e.Timestamp >= SearchDateFrom.Value.Date);
+        }
+        if (SearchDateTo.HasValue)
+        {
+            // Add 1 day to SearchDateTo to include the entire day
+            query = query.Where(e => e.Timestamp < SearchDateTo.Value.Date.AddDays(1));
+        }
+
+        Entries = await query.OrderByDescending(e => e.Timestamp).ToListAsync();
+    }
+
+    public async Task<IActionResult> OnGetExportAsync()
+    {
+        var query = _context.Entries!.AsQueryable();
+
+        if (!string.IsNullOrEmpty(SearchPhone))
+        {
+            query = query.Where(e => e.PhoneNumber != null && e.PhoneNumber.Contains(SearchPhone));
+        }
+        if (!string.IsNullOrEmpty(SearchCode))
+        {
+            query = query.Where(e => e.Code != null && e.Code.Contains(SearchCode));
+        }
+        if (SearchDateFrom.HasValue)
+        {
+            query = query.Where(e => e.Timestamp >= SearchDateFrom.Value.Date);
+        }
+        if (SearchDateTo.HasValue)
+        {
+            query = query.Where(e => e.Timestamp < SearchDateTo.Value.Date.AddDays(1));
+        }
+
+        var entriesToExport = await query.OrderByDescending(e => e.Timestamp).ToListAsync();
+
+        var builder = new System.Text.StringBuilder();
+        builder.AppendLine("Id,PhoneNumber,Code,OcrCode,ImageHash,Timestamp,ImagePath");
+        foreach (var entry in entriesToExport)
+        {
+            builder.AppendLine($"{entry.Id},{entry.PhoneNumber},{entry.Code},{entry.OcrCode},{entry.ImageHash},{entry.Timestamp:yyyy-MM-dd HH:mm:ss},{entry.ImagePath}");
+        }
+
+        return File(System.Text.Encoding.UTF8.GetBytes(builder.ToString()), "text/csv", $"entries-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+    }
+}
